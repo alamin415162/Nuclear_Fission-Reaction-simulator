@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fission Lab Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0a0e17;
+            color: #e2e8f0;
+            font-family: system-ui, sans-serif;
+            overflow: hidden;
+        }
+
+        .panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        input[type=range] {
+            accent-color: #3b82f6;
+            cursor: pointer;
+        }
+
+        canvas {
+            background: #000;
+            border-radius: 8px;
+            width: 100%;
+            height: 100%;
+        }
+
+        .status-text {
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
+</head>
+
+<body class="h-screen flex items-center justify-center p-4">
+
+    <div class="max-w-6xl w-full grid grid-cols-1 md:grid-cols-3 gap-6">
+
+        <!-- Controls Sidebar -->
+        <div class="panel p-6 rounded-2xl flex flex-col gap-6">
+            <div>
+                <h1 class="text-3xl font-bold text-blue-400">Fission Lab</h1>
+                <p class="text-xs text-slate-400 mt-1 uppercase tracking-wider">Uranium-235 Chain Reaction</p>
+            </div>
+
+            <div class="space-y-4">
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm">
+                        <span>Fuel Density (Enrichment)</span>
+                    </div>
+                    <input type="range" id="density" min="10" max="150" value="60" class="w-full">
+                    <div class="flex justify-between text-[10px] text-slate-500">
+                        <span>LOW</span>
+                        <span>SUPERCRITICAL</span>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex justify-between text-sm">
+                        <span>Control Rod Insertion</span>
+                    </div>
+                    <input type="range" id="rods" min="0" max="100" value="30" class="w-full">
+                    <div class="flex justify-between text-[10px] text-slate-500">
+                        <span>WITHDRAWN</span>
+                        <span>FULLY IN</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-2 mt-auto">
+                <button id="injectBtn"
+                    class="bg-blue-600 hover:bg-blue-500 transition py-3 rounded-lg font-bold text-white shadow-lg active:scale-95">Inject
+                    Neutron</button>
+                <button id="resetBtn"
+                    class="bg-slate-700 hover:bg-slate-600 transition py-3 rounded-lg font-bold text-slate-200">Reset
+                    Core</button>
+            </div>
+
+            <div class="border-t border-slate-700 pt-4 space-y-2 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Active Neutrons:</span>
+                    <span id="statNeutrons" class="status-text text-blue-400">0</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Fission Events:</span>
+                    <span id="statFissions" class="status-text text-orange-400">0</span>
+                </div>
+                <div class="flex justify-between font-bold">
+                    <span class="text-slate-400">Status:</span>
+                    <span id="statStatus">SUBCRITICAL</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Display -->
+        <div class="md:col-span-2 flex flex-col gap-4 h-[600px]">
+            <div class="relative flex-grow rounded-xl overflow-hidden border border-slate-700">
+                <canvas id="coreCanvas"></canvas>
+            </div>
+
+            <div class="panel h-32 rounded-xl p-4 relative overflow-hidden border border-slate-700">
+                <span class="absolute top-2 left-3 text-[10px] text-slate-500 uppercase tracking-widest font-bold">Power
+                    Output (Neutron Flux)</span>
+                <canvas id="graphCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('coreCanvas');
+        const ctx = canvas.getContext('2d');
+        const gCanvas = document.getElementById('graphCanvas');
+        const gCtx = gCanvas.getContext('2d');
+
+        const densityInput = document.getElementById('density');
+        const rodsInput = document.getElementById('rods');
+        const injectBtn = document.getElementById('injectBtn');
+        const resetBtn = document.getElementById('resetBtn');
+
+        const statNeutrons = document.getElementById('statNeutrons');
+        const statFissions = document.getElementById('statFissions');
+        const statStatus = document.getElementById('statStatus');
+
+        let atoms = [];
+        let neutrons = [];
+        let totalFissions = 0;
+        let history = new Array(100).fill(0);
+
+        function resize() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            gCanvas.width = gCanvas.parentElement.clientWidth;
+            gCanvas.height = gCanvas.parentElement.clientHeight;
+            initAtoms();
+        }
+
+        function initAtoms() {
+            atoms = [];
+            const count = parseInt(densityInput.value);
+            for (let i = 0; i < count; i++) {
+                atoms.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    active: true
+                });
+            }
+        }
+
+        function injectNeutron() {
+            neutrons.push({
+                x: 0,
+                y: Math.random() * canvas.height,
+                vx: 3 + Math.random() * 2,
+                vy: (Math.random() - 0.5) * 2,
+                life: 300
+            });
+        }
+
+        function resetCore() {
+            neutrons = [];
+            totalFissions = 0;
+            initAtoms();
+        }
+
+        function update() {
+            const rodHeight = (rodsInput.value / 100) * canvas.height;
+            const currentNeutronCount = neutrons.length;
+
+            // Update Neutrons
+            for (let i = neutrons.length - 1; i >= 0; i--) {
+                let n = neutrons[i];
+                n.x += n.vx;
+                n.y += n.vy;
+                n.life--;
+
+                // Check Control Rods (3 rods at top)
+                const rodWidth = 30;
+                const spacing = canvas.width / 4;
+                for (let r = 1; r <= 3; r++) {
+                    let rx = r * spacing - rodWidth / 2;
+                    if (n.x > rx && n.x < rx + rodWidth && n.y < rodHeight) {
+                        neutrons.splice(i, 1);
+                        return;
+                    }
+                }
+
+                // Bounds
+                if (n.x < 0 || n.x > canvas.width || n.y < 0 || n.y > canvas.height || n.life <= 0) {
+                    neutrons.splice(i, 1);
+                    continue;
+                }
+
+                // Collision with Atoms
+                for (let a of atoms) {
+                    if (a.active) {
+                        const dx = n.x - a.x;
+                        const dy = n.y - a.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < 10) {
+                            // Fission!
+                            a.active = false;
+                            totalFissions++;
+                            neutrons.splice(i, 1);
+                            // Release 2-3 new neutrons
+                            const burst = 2 + Math.floor(Math.random() * 2);
+                            for (let j = 0; j < burst; j++) {
+                                const angle = Math.random() * Math.PI * 2;
+                                neutrons.push({
+                                    x: a.x,
+                                    y: a.y,
+                                    vx: Math.cos(angle) * 3,
+                                    vy: Math.sin(angle) * 3,
+                                    life: 200
+                                });
+                            }
+                            // Spawn replacement atom to keep density constant for "demonstration"
+                            setTimeout(() => {
+                                a.active = true;
+                                a.x = Math.random() * canvas.width;
+                                a.y = Math.random() * canvas.height;
+                            }, 2000);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Stats & Graph
+            history.push(neutrons.length);
+            history.shift();
+
+            statNeutrons.innerText = neutrons.length;
+            statFissions.innerText = totalFissions;
+
+            if (neutrons.length > 50) {
+                statStatus.innerText = "SUPERCRITICAL";
+                statStatus.className = "text-red-500 animate-pulse";
+            } else if (neutrons.length > 0) {
+                statStatus.innerText = "CRITICAL";
+                statStatus.className = "text-orange-400";
+            } else {
+                statStatus.innerText = "SUBCRITICAL";
+                statStatus.className = "text-slate-500";
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Atoms
+            ctx.fillStyle = '#1e293b';
+            for (let a of atoms) {
+                if (a.active) {
+                    ctx.beginPath();
+                    ctx.arc(a.x, a.y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // Control Rods
+            const rodHeight = (rodsInput.value / 100) * canvas.height;
+            const rodWidth = 30;
+            const spacing = canvas.width / 4;
+            ctx.fillStyle = '#475569';
+            for (let r = 1; r <= 3; r++) {
+                ctx.fillRect(r * spacing - rodWidth / 2, 0, rodWidth, rodHeight);
+                ctx.strokeStyle = '#64748b';
+                ctx.strokeRect(r * spacing - rodWidth / 2, 0, rodWidth, rodHeight);
+            }
+
+            // Neutrons
+            ctx.fillStyle = '#60a5fa';
+            ctx.shadowBlur = 5;
+            ctx.shadowColor = '#3b82f6';
+            for (let n of neutrons) {
+                ctx.beginPath();
+                ctx.arc(n.x, n.y, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.shadowBlur = 0;
+
+            // Graph
+            gCtx.clearRect(0, 0, gCanvas.width, gCanvas.height);
+            gCtx.beginPath();
+            gCtx.strokeStyle = '#3b82f6';
+            gCtx.lineWidth = 2;
+            const step = gCanvas.width / 100;
+            const maxVal = Math.max(...history, 20);
+            for (let i = 0; i < history.length; i++) {
+                const x = i * step;
+                const y = gCanvas.height - (history[i] / maxVal) * (gCanvas.height - 20) - 10;
+                if (i === 0) gCtx.moveTo(x, y);
+                else gCtx.lineTo(x, y);
+            }
+            gCtx.stroke();
+
+            update();
+            requestAnimationFrame(draw);
+        }
+
+        densityInput.oninput = initAtoms;
+        injectBtn.onclick = injectNeutron;
+        resetBtn.onclick = resetCore;
+        window.onresize = resize;
+
+        window.onload = () => {
+            resize();
+            draw();
+        };
+    </script>
+</body>
+
+</html>
