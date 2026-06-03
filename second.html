@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nuclear Control Console - Physics & Specifications</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        @keyframes spin-2d {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        @keyframes flow-line { 0% { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+        .pulse-flow { stroke-dasharray: 6; animation: flow-line 0.4s linear infinite; }
+
+        @keyframes explode-shake {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            20% { transform: translate(-8px, 6px) scale(1.02); }
+            40% { transform: translate(8px, -6px) scale(0.98); }
+            60% { transform: translate(-6px, -4px); }
+            80% { transform: translate(6px, 4px) scale(1.01); }
+        }
+        .catastrophe-detonation { animation: explode-shake 0.15s infinite; }
+
+        /* Steam Pipe Cloud Dynamic Traversal Track */
+        @keyframes steam-travel {
+            0% { left: 0%; opacity: 0; transform: scale(0.6) translateY(-50%); }
+            15% { opacity: 0.8; }
+            85% { opacity: 0.8; }
+            100% { left: 100%; opacity: 0; transform: scale(1.1) translateY(-50%); }
+        }
+        .steam-cloud {
+            position: absolute;
+            top: 50%;
+            background: rgba(255, 255, 255, 0.85);
+            border-radius: 50%;
+            filter: blur(3px);
+            pointer-events: none;
+            animation: steam-travel linear infinite;
+        }
+    </style>
+</head>
+<body id="master-body" class="bg-slate-950 text-slate-100 min-h-screen p-4 font-sans antialiased select-none transition-colors duration-1000">
+
+    <div id="plant-wrapper" class="max-w-7xl mx-auto space-y-4">
+        
+        <header class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row justify-between items-center shadow-xl gap-4">
+            <div>
+                <h1 class="text-xl font-black tracking-wider text-amber-500 flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping" id="status-ping"></span> 
+                    CRITICAL FISSION PHYSICS CORE & GENERATION STATION
+                </h1>
+                <p class="text-xs text-slate-400">Atomic Mechanics & Emergency Safety Response Deck</p>
+            </div>
+            <div class="flex items-center gap-3 flex-wrap justify-center">
+                <button onclick="openSpecsModal()" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-xs font-black rounded-lg transition-all tracking-wider cursor-pointer shadow-md">
+                    📋 VIEW SPECIFICATIONS
+                </button>
+                <button id="btn-master" onclick="togglePlantPower()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-xs font-black rounded-lg transition-all tracking-wider cursor-pointer shadow-md">
+                    ENGAGE CORE
+                </button>
+                <button onclick="emergencyScram()" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-xs font-black rounded-lg text-white tracking-wider cursor-pointer animate-pulse shadow-md">
+                    EMERGENCY SCRAM
+                </button>
+                <button onclick="resetSim()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded-lg border border-slate-700 cursor-pointer shadow-md">
+                    RESET PLANT
+                </button>
+            </div>
+        </header>
+
+        <div id="schematic-card" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl relative overflow-hidden transition-all duration-300">
+            
+            <svg class="absolute inset-0 w-full h-full pointer-events-none z-0" xmlns="http://www.w3.org/2000/svg">
+                <path d="M 235,145 L 460,145" fill="none" stroke="#475569" stroke-width="22"/>
+                <path d="M 235,145 L 460,145" fill="none" stroke="#1e293b" stroke-width="16"/>
+                <path id="steam-flow-line" d="M 235,145 L 460,145" fill="none" stroke="#e2e8f0" stroke-width="4" class="pulse-flow" style="animation-duration: 0s; opacity: 0; filter: drop-shadow(0 0 2px #fff);"/>
+                
+                <path d="M 830,170 L 980,170" fill="none" stroke="#334155" stroke-width="4"/>
+                <path id="power-wire" d="M 830,170 L 980,170" fill="none" stroke="#10B981" stroke-width="2" class="pulse-flow" style="animation-duration: 0s; opacity: 0;"/>
+            </svg>
+
+            <div id="explosion-overlay" class="absolute inset-0 bg-gradient-to-t from-red-600 via-amber-500 to-transparent opacity-0 pointer-events-none z-40 transition-opacity duration-200 flex items-center justify-center">
+                <div class="text-center bg-black/80 p-8 rounded-2xl border-4 border-red-600 text-red-500 font-black tracking-widest scale-75 animate-bounce">
+                    <div class="text-5xl mb-2">💥 CRITICAL EXPLOSION 💥</div>
+                    <div class="text-sm font-mono text-slate-300">STEAM OVER-PRESSURE SHATTERED PRESSURE VESSEL CONTAINMENT FLUX METRIC UNBOUNDED</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center relative z-10">
+                
+                <div class="lg:col-span-4 bg-slate-950/80 rounded-xl p-4 border border-slate-800 h-88 flex flex-col justify-between relative">
+                    <div class="text-[10px] font-bold tracking-wider text-cyan-400 font-mono">MODULE 1: REACTION VESSEL</div>
+                    
+                    <div class="flex items-center gap-4 my-auto justify-center">
+                        <div class="w-28 h-48 bg-slate-800 border-4 border-slate-700 rounded-b-2xl rounded-t-lg relative overflow-hidden flex flex-col justify-end">
+                            <div id="reactor-glow" class="absolute inset-0 bg-cyan-500 opacity-10 transition-all duration-300"></div>
+                            <div id="rod-shafts" class="absolute top-0 inset-x-3 bg-slate-900 border-b-4 border-amber-500 flex justify-around transition-all duration-300" style="height: 100%;"><div class="w-1 bg-amber-600 h-full"></div><div class="w-1 bg-amber-600 h-full"></div></div>
+                            <div class="w-full h-1/2 bg-blue-500/20 border-t border-cyan-400 relative z-10"></div>
+                            <div id="bubble-emitter" class="absolute inset-0 pointer-events-none z-10 overflow-hidden"></div>
+                        </div>
+
+                        <div class="bg-slate-900/90 p-2.5 rounded-lg border border-slate-800 text-[10px] font-mono space-y-1.5 w-36">
+                            <div class="text-[9px] text-slate-500 uppercase font-black border-b border-slate-800 pb-0.5">Atomic Micro-Data</div>
+                            <div>Enrichment ($U^{235}$): <span id="txt-enrich" class="text-amber-400 font-bold">4.2%</span></div>
+                            <div>Neutron Pop: <span id="txt-neutrons" class="text-orange-400 font-bold">1,000</span></div>
+                            <div>Delayed Cushion: <span id="txt-delayed" class="text-sky-400 font-bold">0.65%</span></div>
+                            <div>Thermal Capacity: <span id="txt-temp" class="text-red-400 font-bold font-mono text-xs">20°C</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="hidden lg:block lg:col-span-1 h-88 relative">
+                    <div id="steam-pipe-cloud-track" class="absolute left-[-22px] top-[134px] w-[265px] h-[22px] pointer-events-none overflow-hidden z-20">
+                        </div>
+                </div>
+
+                <div class="lg:col-span-3 bg-slate-950/80 rounded-xl p-4 border border-slate-800 h-88 flex flex-col justify-between items-center relative">
+                    <div class="text-[10px] font-bold tracking-wider text-purple-400 font-mono">MODULE 2: KINETIC TURBINE</div>
+                    
+                    <div class="w-full flex items-center justify-center h-48 relative">
+                        <div class="w-full h-2 bg-slate-700 rounded absolute"></div>
+                        <div id="turbine-rotor-assembly" class="flex items-center gap-1 z-10 p-2 origin-center transition-transform duration-75">
+                            <div class="w-6 h-20 bg-slate-800 border-y-4 border-x border-slate-600 rounded-sm flex flex-col justify-between p-0.5">
+                                <div class="w-full h-1 bg-slate-400"></div><div class="w-full h-1 bg-slate-400"></div><div class="w-full h-1 bg-slate-400"></div>
+                            </div>
+                            <div class="w-8 h-24 bg-slate-800 border-y-4 border-x border-slate-600 rounded-sm flex flex-col justify-between p-0.5">
+                                <div class="w-full h-1 bg-slate-400"></div><div class="w-full h-1 bg-slate-400"></div><div class="w-full h-1 bg-slate-400"></div>
+                            </div>
+                            <div class="w-10 h-28 bg-slate-800 border-y-4 border-x border-slate-600 rounded-sm flex flex-col justify-between p-0.5">
+                                <div class="w-full h-1 bg-slate-400"></div><div class="w-full h-1 bg-slate-400"></div><div class="w-full h-1 bg-slate-400"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-center">
+                        <span class="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">Shaft Velocity</span>
+                        <span id="txt-rpm" class="text-base font-mono font-bold text-purple-400">0 RPM</span>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-4 bg-slate-950/80 rounded-xl p-4 border border-slate-800 h-88 flex flex-col justify-between items-center relative">
+                    <div class="text-[10px] font-bold tracking-wider text-emerald-400 font-mono">MODULE 3: INDUCTION STAMP GENERATOR</div>
+                    
+                    <div class="w-full flex items-center justify-between px-2 h-48 relative">
+                        <div class="w-24 h-24 rounded-xl border-2 border-slate-700 bg-slate-900 relative flex items-center justify-center overflow-hidden shadow-inner">
+                            <div class="absolute inset-1 rounded-lg border-2 border-orange-500/40 animate-pulse"></div>
+                            <div id="gen-magnet" class="w-14 h-6 bg-gradient-to-r from-red-600 to-blue-600 text-[8px] font-mono font-black text-white flex items-center justify-around rounded shadow-md" style="transform: rotate(0deg);">
+                                <span>N</span><span>S</span>
+                            </div>
+                        </div>
+
+                        <div id="transformer-box" class="w-24 h-28 bg-slate-900 border-2 border-slate-700 rounded-xl p-2 flex flex-col justify-between items-center transition-all duration-300 shadow-lg">
+                            <div class="text-[8px] bg-amber-500/20 text-amber-400 border border-amber-500/40 px-1 rounded font-mono font-black animate-pulse">HV OUTLET</div>
+                            <span id="icon-lightning" class="text-2xl text-slate-700 transition-colors duration-300">⚡</span>
+                            <div class="text-[9px] text-center font-bold text-slate-400 tracking-tighter leading-none">GRID SUBSTATION CONNECTION</div>
+                        </div>
+                    </div>
+
+                    <div class="text-center w-full bg-slate-900 py-1.5 rounded-lg border border-slate-800">
+                        <span class="text-[10px] text-slate-500 block font-black uppercase tracking-wider">Net Electromagnetic Distribution Load</span>
+                        <span id="txt-megawatts" class="text-xl font-mono font-black text-emerald-400">0.0 MWe</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            
+            <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4 shadow-xl">
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-2">Integrated Operator Actuators</div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-slate-950 p-3 rounded-xl border border-slate-850 space-y-2">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="font-bold text-amber-500">1. Core Throttle (Rods Withdrawal)</span>
+                            <span id="lbl-rods" class="font-mono text-amber-400 font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800">0%</span>
+                        </div>
+                        <input type="range" id="sl-rods" min="0" max="100" value="0" class="w-full h-2 bg-slate-800 accent-amber-500 rounded cursor-pointer">
+                    </div>
+
+                    <div class="bg-slate-950 p-3 rounded-xl border border-slate-850 space-y-2">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="font-bold text-purple-400">2. Electromagnetic Steam Valve</span>
+                            <span id="lbl-load" class="font-mono text-purple-400 font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800">15%</span>
+                        </div>
+                        <input type="range" id="sl-load" min="0" max="100" value="15" class="w-full h-2 bg-slate-800 accent-purple-500 rounded cursor-pointer">
+                    </div>
+
+                    <div class="bg-slate-950 p-3 rounded-xl border border-slate-850 space-y-2">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="font-bold text-sky-400">3. Initial Fuel Enrichment Layer</span>
+                            <span id="lbl-enrich" class="font-mono text-sky-400 font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800">3.5%</span>
+                        </div>
+                        <input type="range" id="sl-enrich" min="20" max="200" value="35" step="5" class="w-full h-2 bg-slate-800 accent-sky-500 rounded cursor-pointer">
+                    </div>
+
+                    <div class="bg-slate-950 p-3 rounded-xl border border-slate-850 space-y-2">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="font-bold text-cyan-400">4. Fluid Moderator Density</span>
+                            <span id="lbl-mod" class="font-mono text-cyan-400 font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800">100%</span>
+                        </div>
+                        <input type="range" id="sl-mod" min="10" max="100" value="100" class="w-full h-2 bg-slate-800 accent-cyan-500 rounded cursor-pointer">
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between shadow-xl">
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-2">Active Console Diagnosis Stream</div>
+                <div id="terminal-screen" class="bg-slate-950 border border-slate-850 p-3 rounded-xl h-36 overflow-y-auto font-mono text-sm text-emerald-400 space-y-1 mt-2 shadow-inner">
+                    <div>[SYS] Reactor control desk responsive. Ready for startup vector sequence.</div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <div id="specs-modal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm transition-all">
+        <div class="bg-slate-50 border-2 border-slate-300 max-w-2xl w-full rounded-2xl shadow-2xl p-6 space-y-6 text-slate-900">
+            
+            <div class="flex justify-between items-center border-b border-slate-200 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-blue-600 text-xl">📁</span>
+                    <h2 class="text-lg font-black tracking-wider text-slate-800 uppercase font-mono">Facility Technical Reference Matrix</h2>
+                </div>
+                <button onclick="closeSpecsModal()" class="w-8 h-8 flex items-center justify-center bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-full text-sm font-bold cursor-pointer transition-colors">✕</button>
+            </div>
+            
+            <div class="space-y-4 text-sm font-sans">
+                
+                <div class="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-2 mb-2">
+                        <span class="font-black text-base text-blue-600 tracking-wide font-mono">■ THERMAL MANAGEMENT CRITERIA</span>
+                        <span class="px-2.5 py-1 bg-blue-50 text-xs text-blue-700 font-bold rounded-md">THERMAL</span>
+                    </div>
+                    <ul class="list-disc pl-5 space-y-1.5 text-slate-700 font-mono text-sm">
+                        <li>Ambient Equilibrium Core Baseline: <b class="text-slate-900">20.0 °C</b></li>
+                        <li>Optimal Reactor Power Core Envelope: <b class="text-emerald-600 font-bold">240.0 °C – 310.0 °C</b></li>
+                        <li>Structural Core Thermal Safety Limit: <b class="text-amber-600 font-bold">320.0 °C</b></li>
+                    </ul>
+                </div>
+
+                <div class="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-2 mb-2">
+                        <span class="font-black text-base text-emerald-600 tracking-wide font-mono">■ ELECTROMAGNETIC TRANSMISSION VALUES</span>
+                        <span class="px-2.5 py-1 bg-emerald-50 text-xs text-emerald-700 font-bold rounded-md">LOAD SPEED</span>
+                    </div>
+                    <ul class="list-disc pl-5 space-y-1.5 text-slate-700 font-mono text-sm">
+                        <li>Induction Generator Cut-in Threshold: <b class="text-slate-900">5.0 MWe</b></li>
+                        <li>Standard Grid Delivery Target capacity: <b class="text-emerald-600 font-bold">1,000.0 MWe</b></li>
+                        <li>Absolute Engineering Over-Load Limit: <b class="text-slate-900">1,250.0 MWe</b></li>
+                    </ul>
+                </div>
+
+                <div class="p-4 bg-rose-50 rounded-xl border border-rose-200 shadow-xs">
+                    <div class="flex justify-between items-center border-b border-rose-100 pb-2 mb-2">
+                        <span class="font-black text-base text-rose-700 tracking-wide font-mono">💥 CATASTROPHIC FAILURE METRICS</span>
+                        <span class="px-2.5 py-1 bg-rose-100 text-xs text-rose-700 font-bold rounded-md animate-pulse">CRITICAL BOUNDS</span>
+                    </div>
+                    <p class="text-sm font-mono text-rose-900 leading-relaxed">
+                        Absolute Flash Vaporization Flash Point: <b class="text-red-600 text-base font-bold">480.0 °C</b>
+                        <br>
+                        <span class="text-xs text-rose-700 mt-2 block leading-relaxed">Exceeding this boundary flashes reactor fluid volumes to instant over-pressure steam vectors, blowing out all structural containment shielding completely.</span>
+                    </p>
+                </div>
+            </div>
+            
+            <div class="pt-3 flex justify-end border-t border-slate-200">
+                <button onclick="closeSpecsModal()" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-black rounded-lg cursor-pointer transition-colors tracking-wide font-mono shadow-md">DISMISS SPECIFICATIONS</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isOperational = false;
+        let coreHeatCelsius = 20;
+        let rotationalRPM = 0;
+        let electricalNetMWe = 0;
+        let neutronPopulation = 1000;
+        let exploded = false;
+        let magneticAngle = 0;
+        let turbineAngle = 0;
+        let lastLoggedOutput = 0;
+
+        const ENVIRONMENTAL_TEMP = 20;
+
+        // Interface Node Targets
+        const slRods = document.getElementById('sl-rods');
+        const slLoad = document.getElementById('sl-load');
+        const slEnrich = document.getElementById('sl-enrich');
+        const slMod = document.getElementById('sl-mod');
+        const emitter = document.getElementById('bubble-emitter');
+        const wirePulse = document.getElementById('power-wire');
+        const steamTubePulse = document.getElementById('steam-flow-line');
+        const lightningIcon = document.getElementById('icon-lightning');
+        const transformer = document.getElementById('transformer-box');
+        const terminal = document.getElementById('terminal-screen');
+        const genMagnet = document.getElementById('gen-magnet');
+        const turbineRotorAssembly = document.getElementById('turbine-rotor-assembly');
+        const steamCloudTrack = document.getElementById('steam-pipe-cloud-track');
+
+        // Central processing computational cycle timer loop
+        setInterval(() => {
+            if (exploded) return;
+
+            if (!isOperational) {
+                if (coreHeatCelsius > 20) coreHeatCelsius -= 0.2;
+                rotationalRPM = Math.max(0, rotationalRPM - 35);
+                electricalNetMWe = Math.max(0, electricalNetMWe - 1.5);
+                neutronPopulation = Math.max(1000, neutronPopulation - 20);
+                renderDashboardMetrics();
+                return;
+            }
+
+            const valRods = parseInt(slRods.value) / 100;
+            const valLoad = parseInt(slLoad.value) / 100;
+            const valEnrich = parseInt(slEnrich.value) / 10;
+            const valMod = parseInt(slMod.value) / 100;
+
+            // 1. CORE PHYSICS CALCULATIONS
+            let multiplicationFactorK = (valRods * 1.05) * (valEnrich / 3.5) * valMod;
+            let fuelTempDampener = (coreHeatCelsius - 20) * 0.0006;
+            multiplicationFactorK -= fuelTempDampener;
+
+            if (multiplicationFactorK > 1.0) {
+                let deltaNeutrons = neutronPopulation * (multiplicationFactorK - 1.0) * 0.4;
+                neutronPopulation += deltaNeutrons;
+            } else {
+                neutronPopulation += (1000 - neutronPopulation) * 0.15;
+            }
+
+            // 2. THERMODYNAMIC COEFFICIENTS 
+            let generatedThermalMW = (neutronPopulation / 1000) * (valEnrich / 2);
+            let energyDissipated = (coreHeatCelsius - 20) * 0.05;
+            coreHeatCelsius += (generatedThermalMW * 0.05) - energyDissipated;
+            if (coreHeatCelsius < 20) coreHeatCelsius = 20;
+
+            // 3. STEAM SYSTEM KINETIC DELIVERY WITH PHASE CHANGE RULE (>= 100°C)
+            let incomingVaporPressure = 0;
+            
+            if (coreHeatCelsius >= 100) {
+                // Steam only exists and exerts force once water reaches boiling threshold
+                incomingVaporPressure = (coreHeatCelsius - 100) * valLoad * 12;
+                triggerSteamCloudParticles(); // Render visible running steam clouds
+            }
+
+            rotationalRPM += (incomingVaporPressure - rotationalRPM) * 0.06;
+
+            // Compute structural 2D rotational vector frames
+            if (rotationalRPM > 5) {
+                let mechanicalDeltaStep = (rotationalRPM * 0.05);
+                magneticAngle += mechanicalDeltaStep;
+                turbineAngle += mechanicalDeltaStep;
+
+                genMagnet.style.transform = `rotate(${magneticAngle % 360}deg)`;
+                turbineRotorAssembly.style.transform = `rotate(${turbineAngle % 360}deg)`;
+            }
+
+            let instantMegawatts = (rotationalRPM / 3600) * 1100;
+            electricalNetMWe += (instantMegawatts - electricalNetMWe) * 0.08;
+
+            // 4. DAMAGE AND DISASTER HANDLERS
+            if (coreHeatCelsius > 320 && coreHeatCelsius <= 480) {
+                postConsoleAlert(`WARNING: PRESSURE VESSEL DESIGN LIMIT EXCEEDED`, "text-amber-500 font-bold animate-pulse");
+            }
+            if (coreHeatCelsius > 480) {
+                triggerCatastropheSequence();
+                return;
+            }
+
+            let roundedPower = Math.round(electricalNetMWe);
+            if (Math.abs(roundedPower - lastLoggedOutput) >= 60 && roundedPower > 0) {
+                postConsoleAlert(`Data Tracking Shift. Core Temp: ${coreHeatCelsius.toFixed(0)}°C | Output Level: ${roundedPower} MWe`, "text-sky-400");
+                lastLoggedOutput = roundedPower;
+            }
+
+            renderDashboardMetrics();
+            generateBoilingParticles();
+        }, 100);
+
+        // Instantiates horizontal tracking cloud particles across the pipe track
+        function triggerSteamCloudParticles() {
+            // Safety cap to prevent browser thread bloat
+            if (steamCloudTrack.childElementCount > 15) return;
+
+            const cloud = document.createElement('div');
+            cloud.className = "steam-cloud";
+            
+            // Randomize size dimensions slightly for fluid variance
+            const dimensions = Math.floor(Math.random() * 8) + 6;
+            cloud.style.width = dimensions + "px";
+            cloud.style.height = dimensions + "px";
+            
+            // Speed relies on RPM; if RPM is near 0, give it a baseline fallback flow velocity
+            let speedFactor = rotationalRPM > 10 ? rotationalRPM : 150;
+            let dynamicVelocity = 1.8 / (speedFactor / 1000);
+            dynamicVelocity = Math.max(0.12, Math.min(2.5, dynamicVelocity));
+            cloud.style.animationDuration = dynamicVelocity + "s";
+
+            steamCloudTrack.appendChild(cloud);
+            
+            // Garbage collection auto-destroy
+            setTimeout(() => { cloud.remove(); }, dynamicVelocity * 1000);
+        }
+
+        function renderDashboardMetrics() {
+            document.getElementById('lbl-rods').innerText = slRods.value + "%";
+            document.getElementById('lbl-load').innerText = slLoad.value + "%";
+            document.getElementById('lbl-enrich').innerText = (parseInt(slEnrich.value)/10).toFixed(1) + "%";
+            document.getElementById('lbl-mod').innerText = slMod.value + "%";
+
+            document.getElementById('txt-enrich').innerText = (parseInt(slEnrich.value)/10).toFixed(1) + "%";
+            document.getElementById('txt-neutrons').innerText = Math.round(neutronPopulation).toLocaleString();
+            let delayedFraction = Math.max(0.01, 0.65 - ((coreHeatCelsius - 20) * 0.001));
+            document.getElementById('txt-delayed').innerText = delayedFraction.toFixed(2) + "%";
+
+            document.getElementById('txt-temp').innerText = coreHeatCelsius.toFixed(1) + " °C";
+            document.getElementById('txt-rpm').innerText = Math.round(rotationalRPM) + " RPM";
+            document.getElementById('txt-megawatts').innerText = electricalNetMWe.toFixed(1) + " MWe";
+
+            const glow = document.getElementById('reactor-glow');
+            document.getElementById('rod-shafts').style.height = (100 - slRods.value) + "%";
+            
+            if (coreHeatCelsius > 60) {
+                glow.style.backgroundColor = 'rgb(239, 68, 68)';
+                glow.style.opacity = Math.min(0.9, (coreHeatCelsius / 400));
+            } else {
+                glow.style.backgroundColor = 'rgb(6, 182, 212)';
+                glow.style.opacity = isOperational ? 0.25 : 0.05;
+            }
+
+            if (coreHeatCelsius >= 100 && parseInt(slLoad.value) > 2) {
+                let speedFactor = rotationalRPM > 10 ? rotationalRPM : 150;
+                let dynamicVelocity = 1.8 / (speedFactor / 1000);
+                dynamicVelocity = Math.max(0.04, Math.min(1.8, dynamicVelocity));
+                steamTubePulse.style.opacity = "1";
+                steamTubePulse.style.animationDuration = dynamicVelocity + "s";
+            } else {
+                steamTubePulse.style.opacity = "0";
+                steamTubePulse.style.animationDuration = "0s";
+            }
+
+            if (electricalNetMWe > 5) {
+                let dynamicGridVelocity = 2.5 / (electricalNetMWe / 150);
+                wirePulse.style.opacity = "1";
+                wirePulse.style.animationDuration = Math.max(0.05, dynamicGridVelocity) + "s";
+                lightningIcon.className = "text-amber-400 text-2xl font-black animate-bounce";
+                transformer.style.borderColor = "#10B981";
+            } else {
+                wirePulse.style.opacity = "0";
+                wirePulse.style.animationDuration = "0s";
+                lightningIcon.className = "text-slate-700 text-2xl font-bold";
+                transformer.style.borderColor = "#334155";
+            }
+        }
+
+        function generateBoilingParticles() {
+            if (coreHeatCelsius < 75 || !isOperational) return;
+            const threshold = Math.min(5, Math.floor(coreHeatCelsius / 70));
+            for (let i = 0; i < threshold; i++) {
+                const b = document.createElement('div');
+                b.className = "absolute bg-white/40 rounded-full transition-all duration-500 pointer-events-none";
+                b.style.width = b.style.height = (Math.floor(Math.random() * 4) + 2) + "px";
+                b.style.left = Math.floor(Math.random() * 100) + "%";
+                b.style.bottom = "8px";
+                emitter.appendChild(b);
+                setTimeout(() => { b.style.transform = "translateY(-110px)"; b.style.opacity = "0"; }, 10);
+                setTimeout(() => { b.remove(); }, 500);
+            }
+        }
+
+        function triggerCatastropheSequence() {
+            exploded = true;
+            isOperational = false;
+            
+            document.getElementById('schematic-card').className = "bg-slate-950 border-4 border-red-700 rounded-2xl p-6 shadow-2xl catastrophe-detonation";
+            document.getElementById('explosion-overlay').style.opacity = "1";
+            document.getElementById('master-body').className = "bg-red-950 text-slate-100 min-h-screen p-4 font-sans antialiased select-none";
+
+            document.getElementById('txt-temp').innerText = "FATAL ERROR";
+            document.getElementById('txt-rpm').innerText = "STRUCTURAL BREAK";
+            document.getElementById('txt-megawatts').innerText = "GRID SHUTDOWN";
+            steamTubePulse.style.opacity = "0";
+            wirePulse.style.opacity = "0";
+            steamCloudTrack.innerHTML = ""; 
+
+            postConsoleAlert("!!! FATAL ACCIDENT: MECHANICAL PRESSURE VESSEL FAILED DUE TO THERMAL POWER SPIKE !!!", "text-red-500 bg-red-950 p-2 border-2 border-red-700 font-black");
+        }
+
+        function togglePlantPower() {
+            if (exploded) return;
+            isOperational = !isOperational;
+            const b = document.getElementById('btn-master');
+            const ping = document.getElementById('status-ping');
+            if (isOperational) {
+                b.innerText = "POWER DOWN";
+                b.className = "px-4 py-2 bg-amber-600 hover:bg-amber-500 text-xs font-black rounded-lg transition-all tracking-wider cursor-pointer shadow-md";
+                ping.className = "w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping";
+                postConsoleAlert("Breaker matrix engaged. Neutron flux multiplication loop starting.", "text-emerald-400 font-bold");
+            } else {
+                b.innerText = "ENGAGE CORE";
+                b.className = "px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-xs font-black rounded-lg transition-all tracking-wider cursor-pointer shadow-md";
+                ping.className = "w-2.5 h-2.5 bg-red-500 rounded-full";
+                postConsoleAlert("Reactor tripped manually. Hot shutdown configuration online.", "text-amber-400");
+            }
+        }
+
+        function emergencyScram() {
+            if (exploded) return;
+            slRods.value = 0;
+            postConsoleAlert("!!! EMERGENCY SCRAM TRIPPED - ROD EXTRACTION INTERRUPTED FORCED DOWNWARD !!!", "text-red-400 bg-red-950/40 p-1 border border-red-900 font-bold");
+            if (!isOperational) togglePlantPower();
+        }
+
+        function resetSim() {
+            exploded = false;
+            isOperational = false;
+            coreHeatCelsius = 20;
+            rotationalRPM = 0;
+            electricalNetMWe = 0;
+            neutronPopulation = 1000;
+
+            slRods.value = 0;
+            slLoad.value = 15;
+            slEnrich.value = 35;
+            slMod.value = 100;
+
+            document.getElementById('schematic-card').className = "bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl relative overflow-hidden transition-all duration-300";
+            document.getElementById('explosion-overlay').style.opacity = "0";
+            document.getElementById('master-body').className = "bg-slate-950 text-slate-100 min-h-screen p-4 font-sans antialiased select-none";
+
+            const b = document.getElementById('btn-master');
+            b.innerText = "ENGAGE CORE";
+            b.className = "px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-xs font-black rounded-lg transition-all tracking-wider cursor-pointer";
+            document.getElementById('status-ping').className = "w-2.5 h-2.5 bg-red-500 rounded-full";
+
+            terminal.innerHTML = "<div>[SYS] Structural restoration complete. Diagnostics nominal. Ready for safe operation.</div>";
+            
+            turbineRotorAssembly.style.transform = `rotate(0deg)`;
+            genMagnet.style.transform = `rotate(0deg)`;
+            steamCloudTrack.innerHTML = "";
+            
+            renderDashboardMetrics();
+        }
+
+        function postConsoleAlert(msg, tailwindColorClass = "text-slate-400") {
+            const time = new Date().toLocaleTimeString();
+            terminal.innerHTML += `<div class="${tailwindColorClass}">[${time}] ${msg}</div>`;
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        // Modal Action Helpers
+        function openSpecsModal() { document.getElementById('specs-modal').classList.remove('hidden'); }
+        function closeSpecsModal() { document.getElementById('specs-modal').classList.add('hidden'); }
+    </script>
+</body>
+</html>
